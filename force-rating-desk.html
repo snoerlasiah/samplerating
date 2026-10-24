@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Force Rating Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one working column. Header + gate strip on top, role-aware tabs below; dense ledger tables, quota meters beside the rating list. */
+:root{
+  --bg:#F1F4F4; --surface:#FFFFFF; --ink:#15232A; --muted:#5A6A72; --line:#D3DBDE;
+  --accent:#0B6E6E; --accent-ink:#FFFFFF; --accent-soft:#DCEDED;
+  --ok:#1B6E3F; --ok-soft:#DDF0E4; --warn:#8F5200; --warn-soft:#FBEBCB; --bad:#A8231B; --bad-soft:#F8DEDB;
+  --lock:#7A878D; --lock-soft:#E7ECEE;
+  --body:'IBM Plex Sans','PingFang SC','Microsoft YaHei','Noto Sans SC',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E181D; --surface:#16242A; --ink:#E3ECEE; --muted:#9BABB2; --line:#2A3A41;
+  --accent:#4FC4C0; --accent-ink:#062120; --accent-soft:#17383A;
+  --ok:#74D19B; --ok-soft:#173523; --warn:#F0B35A; --warn-soft:#3A2B10; --bad:#FF9C93; --bad-soft:#40201D;
+  --lock:#8FA0A7; --lock-soft:#20323A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E181D; --surface:#16242A; --ink:#E3ECEE; --muted:#9BABB2; --line:#2A3A41;
+  --accent:#4FC4C0; --accent-ink:#062120; --accent-soft:#17383A;
+  --ok:#74D19B; --ok-soft:#173523; --warn:#F0B35A; --warn-soft:#3A2B10; --bad:#FF9C93; --bad-soft:#40201D;
+  --lock:#8FA0A7; --lock-soft:#20323A; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--body);
+  padding-block:18px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1160px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.zh{opacity:.82}
+.mut{color:var(--muted)} .mono{font-family:var(--mono)}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.top{display:flex;flex-wrap:wrap;gap:12px 20px;justify-content:space-between;align-items:flex-end}
+h1{margin:0;font-size:22px;font-weight:600;letter-spacing:-.01em;text-wrap:balance}
+.sub{margin:2px 0 0;color:var(--muted);font-family:var(--mono);font-size:12px}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;padding:6px 10px;font-size:12px;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+select{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;max-width:100%}
+label.v{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.gate{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px;min-width:0}
+.gate .gl{font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:baseline}
+.gate .gl b{font-family:var(--mono);color:var(--accent)}
+.gate .gv{font-family:var(--mono);font-size:18px;margin:4px 0 6px}
+.bar{height:4px;background:var(--lock-soft);border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;padding:8px 14px;white-space:nowrap;color:var(--muted)}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;min-width:0}
+.pad{padding:12px 14px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.tchip{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:7px 10px;text-align:left;display:flex;flex-direction:column;gap:3px;min-width:0}
+.tchip[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.tchip small{color:var(--muted);font-size:12px}
+
+.chip{display:inline-block;border-radius:4px;padding:1px 7px;font-size:11px;line-height:1.6;background:var(--lock-soft);color:var(--lock);white-space:nowrap}
+.chip.ok{background:var(--ok-soft);color:var(--ok)} .chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)} .chip.info{background:var(--accent-soft);color:var(--accent)}
+
+.banner{border-radius:6px;padding:10px 14px;border:1px solid var(--line);background:var(--lock-soft)}
+.banner.ok{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+.banner.info{background:var(--accent-soft);border-color:transparent}
+.banner.warn{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.banner ul{margin:6px 0 0;padding-left:18px}
+
+.fdrow{padding:10px 14px;border-top:1px solid var(--line)}
+.fdrow:first-child{border-top:0}
+.fdhead{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;margin-bottom:8px}
+.fd{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.fc{border:1px solid var(--line);border-radius:5px;padding:6px 4px;text-align:center;background:var(--surface);min-width:0}
+.fc .fg{font-family:var(--mono);font-weight:500;font-size:13px;color:var(--muted)}
+.fc .fn{font-family:var(--mono);font-size:18px;line-height:1.2}
+.fc .fp{font-family:var(--mono);font-size:12px}
+.fc .fr{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.fc .fs{font-size:10px;min-height:14px;margin-top:2px;overflow-wrap:anywhere}
+.fc.ok{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+.fc.over{background:var(--bad-soft);border-color:transparent;color:var(--bad)}
+.fc.under{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.fc.ok .fg,.fc.ok .fr,.fc.over .fg,.fc.over .fr,.fc.under .fg,.fc.under .fr{color:inherit;opacity:.85}
+
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;font-weight:500;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr.grp td{background:var(--bg);font-weight:600;font-size:12px;padding:6px 10px}
+tr.locked td{background:var(--lock-soft)}
+tr.tot td{font-weight:600;background:var(--bg)}
+.emp b{font-weight:500} .emp span{display:block;color:var(--muted);font-size:12px;font-family:var(--mono)}
+.gb{width:32px;height:32px;border:1px solid var(--line);background:var(--surface);border-radius:5px;font-family:var(--mono);font-weight:500}
+.gb+.gb{margin-left:4px}
+.gb.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.gb:disabled{opacity:.45;cursor:not-allowed}
+.prev{display:inline-block;min-width:26px;text-align:center;border:1px dashed var(--line);border-radius:4px;font-family:var(--mono);padding:2px 6px}
+input.rm,input.rs{width:100%;min-width:200px;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:6px 8px}
+input.rm.req,input.rs.req{border-color:var(--bad)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:7px 12px}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:3px 8px;font-size:12px}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}
+.rec td.g{text-align:right;font-family:var(--mono);white-space:nowrap}
+.rec td.g small{display:block;font-size:11px;opacity:.8}
+.rec td.ok{background:var(--ok-soft);color:var(--ok)} .rec td.over{background:var(--bad-soft);color:var(--bad)} .rec td.under{background:var(--warn-soft);color:var(--warn)}
+.note{font-size:12px;color:var(--muted)}
+ul.org{list-style:none;margin:8px 0 0 6px;padding:0 0 0 14px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+ul.org ul.org{margin-top:6px}
+.hd{margin:0;padding:10px 14px;font-size:13px;font-weight:600;border-bottom:1px solid var(--line)}
+textarea.tsv{width:100%;min-height:110px;font-family:var(--mono);font-size:12px;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:8px}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .15s;z-index:20;max-width:90vw}
+#toast.show{opacity:1}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+@media (max-width:560px){.fc .fs{display:none}.fc .fn{font-size:16px}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div id="toast" role="status"></div>
+
+<script>
+(function(){
+var GROUPS=[{id:'SS',en:'Staff & Supervisor',zh:'专员及主管'},{id:'MA',en:'Manager & Asst. Mgr',zh:'经理及副经理'},{id:'SD',en:'Sr. Mgr & DGM',zh:'总监及副总经理'},{id:'GM',en:'GM',zh:'总经理'}];
+var GRADES=['S','A','B','C','D'];
+var QUOTA={S:[0,5],A:[15,20],B:[60,70],C:[5,10],D:[0,5]};
+var DEPTS=[{id:'SAL',en:'Sales',zh:'销售部'},{id:'OPS',en:'Operations',zh:'运营部'}];
+var STAGES={1:{en:'Preliminary 1 · Direct Manager',zh:'初评 · 直属经理',se:'Prelim 1',sz:'初评'},
+            2:{en:'Preliminary 2 · Dept Head',zh:'复评 · 部门负责人',se:'Prelim 2',sz:'复评'},
+            3:{en:'Final · Center Head',zh:'终评 · 中心负责人',se:'Final',sz:'终评'}};
+var ROLES={hr:['HR','人力资源'],center:['Center Head','中心负责人'],dh:['Dept Head','部门负责人'],mgr:['Direct Manager','直属经理']};
+var KEY='force-rating-desk-v2';
+
+var esc=function(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+var ui={lang:'both',viewer:'E1011',tab:'rating',task:null,recapStage:3,recapGroup:'ALL',drafts:true,confirm:null,reopen:null,reopenReason:'',tsv:null,resetAsk:false};
+var S,T={};
+var $app=document.getElementById('app');
+
+function b(en,zh){return ui.lang==='en'?esc(en):ui.lang==='zh'?esc(zh):esc(en)+' <span class="zh">'+esc(zh)+'</span>';}
+function p(en,zh){return ui.lang==='en'?en:ui.lang==='zh'?zh:en+' / '+zh;}
+function fmt(x){return String(+x.toFixed(1));}
+function gname(id){var g=GROUPS.filter(function(x){return x.id===id;})[0];return g;}
+function dname(id){var d=DEPTS.filter(function(x){return x.id===id;})[0];return d;}
+function dp(id){var d=dname(id);return p(d.en,d.zh);}
+
+/* ---------- data ---------- */
+function seed(){
+  var s=20261024;function rnd(){s=(s*1664525+1013904223)%4294967296;return s/4294967296;}
+  var F=['Adi','Bella','Chen','Dewi','Eko','Fang','Gita','Hendra','Irene','Joko','Kevin','Lina','Maya'];
+  var L=['Pratama','Wijaya','Santoso','Lim','Tan','Kusuma','Hartono','Susanto'];
+  var n=0;function nm(){var i=n++,a=i%13,k=Math.floor(i/13);return F[a]+' '+L[(a*2+k*3)%8];}
+  var POS={SAL:['Sales Executive','Account Supervisor','Key Account Executive','Sales Admin'],
+    OPS:['Production Planner','Logistics Supervisor','Operations Executive','QA Inspector'],
+    FIN:['Accountant','Finance Supervisor','AP Executive','Cost Analyst'],
+    HRA:['HR Executive','Recruitment Supervisor','Admin Officer','Payroll Executive']};
+  function kpi(){return Math.min(99.5,Math.round((68+rnd()*26+rnd()*6)*10)/10);}
+  var emps=[];
+  DEPTS.forEach(function(d,di){emps.push({id:'E'+(1001+di),name:nm(),pos:di%2?'DGM':'Sr. Manager',level:'SD',dept:d.id,kpi:kpi(),mgr:'CH01',dh:'CH01',ch:'CH01',rt:{},rm:{}});});
+  var mi=0;
+  DEPTS.forEach(function(d,di){for(var k=0;k<3;k++){emps.push({id:'E'+(1011+mi),name:nm(),pos:k===2?'Asst. Manager':'Manager',level:'MA',dept:d.id,kpi:kpi(),mgr:'E'+(1001+di),dh:'E'+(1001+di),ch:'CH01',rt:{},rm:{}});mi++;}});
+  var j=0;
+  DEPTS.forEach(function(d,di){for(var k=0;k<3;k++){var mid='E'+(1011+di*3+k);for(var q=0;q<5;q++){
+    var pend=[8,17].indexOf(j)>=0;
+    emps.push({id:'E'+(1101+j),name:nm(),pos:POS[d.id][(q+k)%4],level:'SS',dept:d.id,kpi:pend?null:kpi(),mgr:mid,dh:'E'+(1001+di),ch:'CH01',rt:{},rm:{}});j++;}}});
+  return {emps:emps,sub:{},log:[]};
+}
+function load(){try{var j=JSON.parse(localStorage.getItem(KEY));if(j&&j.emps&&j.sub&&j.log)return j;}catch(e){}return seed();}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function log(act,detail){S.log.unshift({t:Date.now(),who:V().name,act:act,detail:detail});if(S.log.length>400)S.log.length=400;}
+
+function person(id){
+  if(id==='HR')return {id:id,name:'HRBP · Performance CoE',role:'hr',dept:'ALL'};
+  if(id==='CH01')return {id:id,name:'Michael Tan',role:'center',dept:'ALL'};
+  var e=S.emps.filter(function(x){return x.id===id;})[0];
+  return e?{id:id,name:e.name,role:e.level==='SD'?'dh':'mgr',dept:e.dept}:null;
+}
+function V(){return person(ui.viewer)||person('HR');}
+
+/* ---------- flow logic ---------- */
+function chain(e){
+  var c=[{s:1,r:e.mgr}],last=e.mgr;
+  if(e.dh!==last){c.push({s:2,r:e.dh});last=e.dh;}
+  if(e.ch!==last){c.push({s:3,r:e.ch});}
+  return c;
+}
+function buildTasks(){
+  var m={};
+  S.emps.forEach(function(e){chain(e).forEach(function(c,i){
+    var k=c.s+':'+c.r;if(!m[k])m[k]={key:k,s:c.s,r:c.r,items:[]};m[k].items.push({e:e,i:i});});});
+  return m;
+}
+function info(t){
+  var sub=!!S.sub[t.key];
+  var pk={};t.items.forEach(function(x){if(x.i>0){var c=chain(x.e)[x.i-1];pk[c.s+':'+c.r]=1;}});
+  var prevKeys=Object.keys(pk),prevPend=prevKeys.filter(function(k){return !S.sub[k];});
+  var kpiPend=t.items.filter(function(x){return x.e.kpi==null;}).length;
+  var rated=t.items.filter(function(x){return x.e.rt[t.s];}).length;
+  var st=sub?'submitted':prevPend.length?'locked':(t.s===1&&rated)?'progress':'open';
+  return {sub:sub,prevKeys:prevKeys,prevPend:prevPend,kpiPend:kpiPend,rated:rated,total:t.items.length,st:st};
+}
+function prevRating(e,s){var c=chain(e),idx=-1;c.forEach(function(x,i){if(x.s===s)idx=i;});return idx>0?e.rt[c[idx-1].s]:null;}
+function changed(e,s){var pr=prevRating(e,s);return !!(pr&&e.rt[s]&&e.rt[s]!==pr);}
+function needRemark(e,s){return changed(e,s)&&!String(e.rm[s]||'').trim();}
+function blockers(t,inf){
+  var r={kpi:inf.kpiPend,unrated:0,remark:0};
+  t.items.forEach(function(x){var e=x.e;if(e.kpi==null)return;if(!e.rt[t.s])r.unrated++;else if(needRemark(e,t.s))r.remark++;});
+  return r;
+}
+function ratingAt(e,s){
+  var c=chain(e).filter(function(x){return x.s<=s;});
+  for(var i=c.length-1;i>=0;i--){var r=e.rt[c[i].s];if(r&&(ui.drafts||S.sub[c[i].s+':'+c[i].r]))return r;}
+  return null;
+}
+function dist(list){var c={S:0,A:0,B:0,C:0,D:0},n=0;list.forEach(function(g){if(g){c[g]++;n++;}});return {c:c,n:n};}
+function state(g,c,n){if(!n)return 'na';var pc=c[g]/n*100,q=QUOTA[g];if(pc<q[0]-1e-9)return 'under';if(pc>q[1]+1e-9)return 'over';return 'ok';}
+function stLabel(s){return s==='ok'?b('In range','范围内'):s==='over'?b('Over','超出'):s==='under'?b('Under','不足'):'';}
+function cells(c,n){
+  return GRADES.map(function(g){var st=state(g,c,n),pc=n?c[g]/n*100:0;
+    return '<div class="fc '+st+'"><div class="fg">'+g+'</div><div class="fn">'+c[g]+'</div><div class="fp">'+(n?fmt(pc)+'%':'–')+'</div><div class="fr">'+QUOTA[g][0]+'–'+QUOTA[g][1]+'%</div><div class="fs">'+stLabel(st)+'</div></div>';}).join('');
+}
+function pname(id){var q=person(id);return q?q.name:id;}
+
+/* ---------- rendering ---------- */
+function render(){
+  T=buildTasks();
+  var v=V();
+  var tabsFor=v.role==='hr'?['progress','recap','audit']:['rating','recap'];
+  if(tabsFor.indexOf(ui.tab)<0)ui.tab=tabsFor[0];
+  var body=ui.tab==='rating'?ratingView():ui.tab==='recap'?recapView():ui.tab==='progress'?progressView():auditView();
+  $app.innerHTML=header()+strip()+tabs(tabsFor)+body+footer();
+}
+function header(){
+  var opts='<option value="HR"'+(ui.viewer==='HR'?' selected':'')+'>HR · '+esc(p('Overview','总览'))+'</option>'+
+    '<option value="CH01"'+(ui.viewer==='CH01'?' selected':'')+'>'+esc(p('Center Head','中心负责人'))+' · Michael Tan</option>';
+  function grp(label,filter){
+    var o=S.emps.filter(filter).map(function(e){return '<option value="'+e.id+'"'+(ui.viewer===e.id?' selected':'')+'>'+esc(e.name)+' · '+esc(dp(e.dept))+'</option>';}).join('');
+    return '<optgroup label="'+esc(label)+'">'+o+'</optgroup>';}
+  opts+=grp(p('Dept Head','部门负责人'),function(e){return e.level==='SD';})+grp(p('Direct Manager','直属经理'),function(e){return e.level==='MA';});
+  var lg=[['en','EN'],['zh','中文'],['both','EN + 中文']].map(function(x){return '<button data-act="lang" data-v="'+x[0]+'" aria-pressed="'+(ui.lang===x[0])+'">'+x[1]+'</button>';}).join('');
+  return '<div class="top"><div><h1>Force Rating Desk</h1><p class="sub">'+b('Center A · October 2026 cycle','A中心 · 2026年10月周期')+'</p></div>'+
+    '<div class="ctl"><label class="v">'+b('View as','查看身份')+'<select id="viewer">'+opts+'</select></label><div class="seg" role="group" aria-label="Language">'+lg+'</div></div></div>';
+}
+function strip(){
+  var all=Object.keys(T).map(function(k){return T[k];});
+  var k0=S.emps.filter(function(e){return e.kpi!=null;}).length,n=S.emps.length;
+  var h='<div class="gate"><div class="gl"><b>G0</b>'+b('KPI completed in BIPO','BIPO中KPI已完成')+'</div><div class="gv">'+k0+' / '+n+'</div><div class="bar"><i style="width:'+(k0/n*100)+'%"></i></div></div>';
+  [1,2,3].forEach(function(s){
+    var ts=all.filter(function(t){return t.s===s;}),d=ts.filter(function(t){return S.sub[t.key];}).length;
+    h+='<div class="gate"><div class="gl"><b>S'+s+'</b>'+b(STAGES[s].en,STAGES[s].zh)+'</div><div class="gv">'+d+' / '+ts.length+'</div><div class="bar"><i style="width:'+(ts.length?d/ts.length*100:0)+'%"></i></div></div>';
+  });
+  return '<div class="strip">'+h+'</div>';
+}
+function tabs(list){
+  var names={rating:['Rating','评级'],recap:['Department recap','部门汇总'],progress:['Progress & gates','进度与关卡'],audit:['Audit log','审计记录']};
+  return '<div class="tabs" role="tablist">'+list.map(function(k){return '<button role="tab" data-act="tab" data-v="'+k+'" aria-selected="'+(ui.tab===k)+'">'+b(names[k][0],names[k][1])+'</button>';}).join('')+'</div>';
+}
+function footer(){
+  var r=ui.resetAsk?'<span class="note">'+b('Erase all ratings and restore sample data?','清除所有评级并恢复示例数据？')+'</span> <button class="btn sm" data-act="reset-go">'+b('Yes, reset','确认重置')+'</button> <button class="btn sm" data-act="reset-no">'+b('Cancel','取消')+'</button>'
+    :'<button class="btn sm" data-act="reset-ask">'+b('Reset sample data','重置示例数据')+'</button>';
+  return '<div class="row note" style="justify-content:space-between"><span>'+b('Sample data, '+S.emps.length+' employees. Saved only in this browser. Quota is an indicator and never blocks submission.','示例数据，共'+S.emps.length+'人。仅保存在本浏览器。分布比例仅作提示，不阻止提交。')+'</span><span>'+r+'</span></div>';
+}
+
+/* --- rating --- */
+function ratingView(){
+  var v=V(),mine=Object.keys(T).map(function(k){return T[k];}).filter(function(t){return t.r===v.id;}).sort(function(a,c){return a.s-c.s;});
+  if(!mine.length)return '<div class="card pad">'+b('No rating tasks for this role.','此角色没有评级任务。')+'</div>';
+  if(!mine.filter(function(t){return t.key===ui.task;}).length)ui.task=mine[0].key;
+  var t=T[ui.task],inf=info(t);
+  var chips='<div class="chips">'+mine.map(function(x){var i=info(x);
+    return '<button class="tchip" data-act="task" data-v="'+x.key+'" aria-pressed="'+(x.key===ui.task)+'"><span>'+b(STAGES[x.s].en,STAGES[x.s].zh)+'</span><small>'+i.total+' '+b('employees','人')+' · '+statusChip(i.st)+'</small></button>';}).join('')+'</div>';
+  var banner;
+  if(inf.sub)banner='<div class="banner ok">'+b('Submitted and locked. Only HR can return this stage.','已提交并锁定。仅HR可退回该环节。')+'</div>';
+  else if(inf.st==='locked'){
+    banner='<div class="banner warn"><b>'+b('Waiting for the previous stage','等待上一环节完成')+'</b> ('+(inf.prevKeys.length-inf.prevPend.length)+' / '+inf.prevKeys.length+' '+b('submitted','已提交')+')<ul>'+
+      inf.prevKeys.slice().sort(function(a,c){return !!S.sub[a]-!!S.sub[c];}).map(function(k){var pt=T[k],pi=info(pt);return '<li>'+esc(pname(pt.r))+' · '+b(STAGES[pt.s].se,STAGES[pt.s].sz)+' · '+pi.rated+' / '+pi.total+' '+b('rated','已评')+' '+statusChip(pi.st)+'</li>';}).join('')+'</ul></div>';
+  }else if(inf.kpiPend)banner='<div class="banner info">'+inf.kpiPend+' '+b('employee(s) locked: KPI not yet completed in BIPO. Rating of the others is open.','名员工已锁定：BIPO中KPI尚未完成。其他员工可正常评级。')+'</div>';
+  else banner='<div class="banner info">'+b('Open for rating.','可以开始评级。')+(t.s>1?' '+b('Ratings are pre-filled from the previous stage. Any change needs a remark.','评级已按上一环节预填，调整须填写说明。'):'')+'</div>';
+  var fd=GROUPS.map(function(g){
+    var its=t.items.filter(function(x){return x.e.level===g.id;});if(!its.length)return '';
+    var d=dist(its.map(function(x){return x.e.rt[t.s];}));
+    return '<div class="fdrow"><div class="fdhead"><b>'+b(g.en,g.zh)+'</b><span class="mut mono">'+d.n+' / '+its.length+' '+b('rated','已评')+'</span>'+
+      (d.n&&d.n<10?'<span class="chip warn">'+b('Small group: 1 person = '+fmt(100/d.n)+'%','小组：1人 = '+fmt(100/d.n)+'%')+'</span>':'')+'</div><div class="fd">'+cells(d.c,d.n)+'</div></div>';}).join('');
+  return chips+banner+
+    '<div class="card"><h3 class="hd">'+b('Forced distribution check (indicator only)','强制分布检查（仅提示）')+'</h3>'+fd+'</div>'+
+    '<div class="card"><div class="toolbar" id="bar">'+barHTML(t,inf)+'</div><div class="scroll">'+tableHTML(t,inf)+'</div></div>';
+}
+function statusChip(st){
+  return st==='submitted'?'<span class="chip ok">'+b('Submitted','已提交')+'</span>':st==='locked'?'<span class="chip">'+b('Waiting','等待上一级')+'</span>':st==='progress'?'<span class="chip info">'+b('In progress','评级中')+'</span>':'<span class="chip info">'+b('Open','待评级')+'</span>';
+}
+function barHTML(t,inf){
+  var left='<span class="mono">'+inf.rated+' / '+inf.total+' '+b('rated','已评')+'</span>';
+  if(inf.sub)return left+'<span class="chip ok">'+b('Locked','已锁定')+'</span>';
+  if(inf.st==='locked')return left+'<span class="chip">'+b('Locked until previous stage is submitted','上一环节提交前锁定')+'</span>';
+  var bl=blockers(t,inf),ok=!bl.kpi&&!bl.unrated&&!bl.remark;
+  var out=0;GROUPS.forEach(function(g){var its=t.items.filter(function(x){return x.e.level===g.id;}),d=dist(its.map(function(x){return x.e.rt[t.s];}));if(d.n&&GRADES.some(function(q){return state(q,d.c,d.n)!=='ok';}))out++;});
+  var msg=[];
+  if(bl.kpi)msg.push(bl.kpi+' '+b('waiting for KPI','待KPI'));
+  if(bl.unrated)msg.push(bl.unrated+' '+b('not rated','未评级'));
+  if(bl.remark)msg.push(bl.remark+' '+b('remark(s) missing','缺少说明'));
+  var mid=ok?(out?'<span class="chip warn">'+out+' '+b('group(s) outside range','组超出范围')+'</span>':'<span class="chip ok">'+b('Ready to submit','可提交')+'</span>'):'<span class="note">'+msg.join(' · ')+'</span>';
+  var right;
+  if(ui.confirm===t.key)right='<span class="note">'+b('Submit and lock this stage?','提交并锁定该环节？')+'</span><button class="btn pri" data-act="submit-go">'+b('Confirm','确认')+'</button><button class="btn" data-act="submit-no">'+b('Cancel','取消')+'</button>';
+  else right=(t.s===1?'<button class="btn" data-act="suggest">'+b('Suggest from KPI rank','按KPI排名建议')+'</button>':'')+'<button class="btn pri" data-act="submit"'+(ok?'':' disabled')+'>'+b('Submit','提交')+'</button>';
+  return '<div class="row">'+left+mid+'</div><div class="row">'+right+'</div>';
+}
+function tableHTML(t,inf){
+  var editableAll=!inf.sub&&inf.st!=='locked';
+  var showPrev=t.items.some(function(x){return x.i>0;});
+  var cols=4+(showPrev?1:0)+(showPrev?1:0);
+  var h='<table><thead><tr><th class="num">#</th><th>'+b('Employee','员工')+'</th><th class="num">KPI</th>'+(showPrev?'<th>'+b('Previous','上一级')+'</th>':'')+'<th>'+b('Rating','评级')+'</th>'+(showPrev?'<th>'+b('Remark if changed','调整说明')+'</th>':'')+'</tr></thead><tbody>';
+  GROUPS.forEach(function(g){
+    var its=t.items.filter(function(x){return x.e.level===g.id;});if(!its.length)return;
+    var ranked=its.filter(function(x){return x.e.kpi!=null;}).sort(function(a,c){return c.e.kpi-a.e.kpi;});
+    var rank={};ranked.forEach(function(x,i){rank[x.e.id]=i+1;});
+    its=its.slice().sort(function(a,c){return (c.e.kpi==null?-1:c.e.kpi)-(a.e.kpi==null?-1:a.e.kpi);});
+    h+='<tr class="grp"><td colspan="'+cols+'">'+b(g.en,g.zh)+' · '+its.length+'</td></tr>';
+    its.forEach(function(x){
+      var e=x.e,pend=e.kpi==null,dis=!editableAll||pend,cur=e.rt[t.s],pr=prevRating(e,t.s);
+      var btns=GRADES.map(function(q){return '<button class="gb'+(cur===q?' on':'')+'" data-act="rate" data-id="'+e.id+'" data-s="'+t.s+'" data-g="'+q+'" aria-pressed="'+(cur===q)+'" aria-label="'+q+' '+esc(e.name)+'"'+(dis?' disabled':'')+'>'+q+'</button>';}).join('');
+      var rem='';
+      if(showPrev){
+        if(changed(e,t.s)){
+          rem=inf.sub?esc(e.rm[t.s]||''):'<input class="rm'+(String(e.rm[t.s]||'').trim()?'':' req')+'" id="rm-'+e.id+'" data-inp="remark" data-id="'+e.id+'" data-s="'+t.s+'" value="'+esc(e.rm[t.s]||'')+'" placeholder="'+esc(p('Reason for change (required)','调整原因（必填）'))+'" aria-label="Remark '+esc(e.name)+'">';
+        }else rem='<span class="mut">–</span>';
+      }
+      h+='<tr class="'+(pend?'locked':'')+'"><td class="num mut">'+(pend?'–':rank[e.id])+'</td><td class="emp"><b>'+esc(e.name)+'</b><span>'+e.id+' · '+esc(e.pos)+' · '+esc(dp(e.dept))+'</span></td>'+
+        '<td class="num">'+(pend?'<span class="chip">'+b('KPI pending in BIPO','BIPO中KPI未完成')+'</span>':e.kpi.toFixed(1))+'</td>'+
+        (showPrev?'<td><span class="prev">'+(pr||'–')+'</span></td>':'')+'<td style="white-space:nowrap">'+btns+'</td>'+(showPrev?'<td>'+rem+'</td>':'')+'</tr>';
+    });
+  });
+  return h+'</tbody></table>';
+}
+
+/* --- recap --- */
+function scopeEmps(){
+  var v=V();
+  return S.emps.filter(function(e){
+    if(e.id===v.id)return false;
+    if(v.role==='hr'||v.role==='center')return true;
+    if(v.role==='dh')return e.dept===v.dept;
+    return e.mgr===v.id;
+  });
+}
+function recapData(){
+  var sc=scopeEmps(),s=ui.recapStage,grp=ui.recapGroup,rows=[],all=[];
+  DEPTS.forEach(function(d){
+    var its=sc.filter(function(e){return e.dept===d.id&&(grp==='ALL'||e.level===grp);});if(!its.length)return;
+    var rs=its.map(function(e){return ratingAt(e,s);});all=all.concat(rs);
+    var q=dist(rs);rows.push({d:d,total:its.length,c:q.c,n:q.n});
+  });
+  var tq=dist(all),tot=rows.reduce(function(a,r){return a+r.total;},0);
+  var gr=GROUPS.map(function(g){var its=sc.filter(function(e){return e.level===g.id;});if(!its.length)return null;var q=dist(its.map(function(e){return ratingAt(e,s);}));return {g:g,total:its.length,c:q.c,n:q.n};}).filter(Boolean);
+  return {rows:rows,tot:{total:tot,c:tq.c,n:tq.n},gr:gr};
+}
+function gcells(c,n,color){
+  return GRADES.map(function(g){var st=color?state(g,c,n):'';return '<td class="g '+st+'">'+c[g]+'<small>'+(n?fmt(c[g]/n*100)+'%':'–')+'</small></td>';}).join('');
+}
+function recapView(){
+  var D=recapData(),color=ui.recapGroup!=='ALL';
+  var stg=[1,2,3].map(function(s){return '<button data-act="rstage" data-v="'+s+'" aria-pressed="'+(ui.recapStage===s)+'">'+b(STAGES[s].se,STAGES[s].sz)+'</button>';}).join('');
+  var go='<option value="ALL">'+esc(p('All level groups','全部职级组'))+'</option>'+GROUPS.map(function(g){return '<option value="'+g.id+'"'+(ui.recapGroup===g.id?' selected':'')+'>'+esc(p(g.en,g.zh))+'</option>';}).join('');
+  go=go.replace('value="ALL"','value="ALL"'+(ui.recapGroup==='ALL'?' selected':''));
+  var head='<tr><th>'+b('Department','部门')+'</th><th class="num">'+b('Rated','已评')+'</th>'+GRADES.map(function(g){return '<th class="num">'+g+' <span style="text-transform:none">'+QUOTA[g][0]+'–'+QUOTA[g][1]+'%</span></th>';}).join('')+'</tr>';
+  var rows=D.rows.map(function(r){return '<tr><td>'+b(r.d.en,r.d.zh)+'</td><td class="num">'+r.n+' / '+r.total+'</td>'+gcells(r.c,r.n,color)+'</tr>';}).join('');
+  rows+='<tr class="tot"><td>'+b('Total','合计')+'</td><td class="num">'+D.tot.n+' / '+D.tot.total+'</td>'+gcells(D.tot.c,D.tot.n,color)+'</tr>';
+  var ghead='<tr><th>'+b('Level group','职级组')+'</th><th class="num">'+b('Rated','已评')+'</th>'+GRADES.map(function(g){return '<th class="num">'+g+'</th>';}).join('')+'</tr>';
+  var grows=D.gr.map(function(r){return '<tr><td>'+b(r.g.en,r.g.zh)+'</td><td class="num">'+r.n+' / '+r.total+'</td>'+gcells(r.c,r.n,true)+'</tr>';}).join('');
+  var tsv=ui.tsv!==null?'<div class="card pad"><div class="note" style="margin-bottom:6px">'+b('Clipboard is blocked here. Select the text below and copy it.','此处无法访问剪贴板，请选中下方文字后复制。')+'</div><textarea class="tsv" id="tsvbox" readonly>'+esc(ui.tsv)+'</textarea><div style="margin-top:6px"><button class="btn sm" data-act="tsv-close">'+b('Close','关闭')+'</button></div></div>':'';
+  return '<div class="row" style="justify-content:space-between"><div class="row"><div class="seg" role="group">'+stg+'</div><select id="rgrp" aria-label="Level group">'+go+'</select>'+
+    '<label class="row note"><input type="checkbox" id="drafts"'+(ui.drafts?' checked':'')+'> '+b('Include drafts','含草稿')+'</label></div>'+
+    '<button class="btn" data-act="copy">'+b('Copy recap (TSV)','复制汇总（TSV）')+'</button></div>'+tsv+
+    '<div class="card"><h3 class="hd">'+b('Recap per department','按部门汇总')+(color?'':' <span class="note" style="font-weight:400">· '+b('pick a level group to check quota','选择职级组以检查分布')+'</span>')+'</h3><div class="scroll"><table class="rec"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div></div>'+
+    '<div class="card"><h3 class="hd">'+b('Quota check per level group','按职级组的分布检查')+'</h3><div class="scroll"><table class="rec"><thead>'+ghead+'</thead><tbody>'+grows+'</tbody></table></div></div>'+
+    '<p class="note">'+b('Percentages use rated employees as the base. Colour: green in range, red over, amber under.','比例以已评级人数为基数。绿色为范围内，红色为超出，橙色为不足。')+'</p>';
+}
+function tsvText(){
+  var D=recapData(),L=[];
+  L.push(['Department'].concat(['Rated','Total'],GRADES.map(function(g){return g+' count';}),GRADES.map(function(g){return g+' %';})).join('\t'));
+  function line(name,r){return [name,r.n,r.total].concat(GRADES.map(function(g){return r.c[g];}),GRADES.map(function(g){return r.n?fmt(r.c[g]/r.n*100):'';})).join('\t');}
+  D.rows.forEach(function(r){L.push(line(r.d.en+' / '+r.d.zh,r));});
+  L.push(line('Total / 合计',D.tot));L.push('');
+  L.push(['Level group'].concat(['Rated','Total'],GRADES.map(function(g){return g+' count';}),GRADES.map(function(g){return g+' %';})).join('\t'));
+  D.gr.forEach(function(r){L.push(line(r.g.en+' / '+r.g.zh,r));});
+  return L.join('\n');
+}
+
+/* --- HR progress --- */
+function progressView(){
+  var all=Object.keys(T).map(function(k){return T[k];}).sort(function(a,c){return a.s-c.s||(a.items[0].e.dept>c.items[0].e.dept?1:-1);});
+  var rows=all.map(function(t){
+    var i=info(t),ds={};t.items.forEach(function(x){ds[x.e.dept]=1;});var dk=Object.keys(ds),dn=dk.length===1?b(dname(dk[0]).en,dname(dk[0]).zh):b('All','全部');
+    var act='';
+    if(i.sub)act=canReturn(t)?'<button class="btn sm" data-act="reopen" data-v="'+t.key+'">'+b('Return','退回')+'</button>':'<span class="note">'+b('Next stage already submitted','下一环节已提交')+'</span>';
+    var ex=ui.reopen===t.key?'<tr><td colspan="8" style="background:var(--bg)"><div class="row"><input class="rs'+(ui.reopenReason.trim()?'':' req')+'" id="rreason" placeholder="'+esc(p('Reason for returning (logged)','退回原因（将记录）'))+'" value="'+esc(ui.reopenReason)+'" style="max-width:420px"><button class="btn sm pri" id="rconf" data-act="reopen-go"'+(ui.reopenReason.trim()?'':' disabled')+'>'+b('Confirm return','确认退回')+'</button><button class="btn sm" data-act="reopen-no">'+b('Cancel','取消')+'</button></div></td></tr>':'';
+    return '<tr><td>'+b(STAGES[t.s].se,STAGES[t.s].sz)+'</td><td>'+esc(pname(t.r))+'</td><td>'+dn+'</td><td class="num">'+i.total+'</td><td class="num">'+i.rated+'</td><td class="num">'+(i.kpiPend||'–')+'</td><td>'+statusChip(i.st)+'</td><td>'+act+'</td></tr>'+ex;
+  }).join('');
+  var pend=S.emps.filter(function(e){return e.kpi==null;});
+  var g0=pend.length?'<ul style="margin:0;padding:0;list-style:none">'+pend.map(function(e){return '<li class="row" style="padding:8px 14px;border-top:1px solid var(--line);justify-content:space-between"><span><b>'+esc(e.name)+'</b> <span class="mono mut">'+e.id+' · '+esc(dp(e.dept))+' · '+esc(pname(e.mgr))+'</span></span><button class="btn sm" data-act="sync" data-id="'+e.id+'">'+b('Simulate BIPO sync','模拟BIPO同步')+'</button></li>';}).join('')+'</ul>'
+    :'<div class="pad note">'+b('All KPI scores are complete.','所有KPI得分已完成。')+'</div>';
+  var demo='<div class="row" style="justify-content:space-between"><span class="note">'+b('Demo: submits every task that is currently open, so you can watch the flow move from managers to dept heads to the center head.','演示：一键提交当前所有已开放的任务，观察流程从经理到部门负责人再到中心负责人。')+'</span><button class="btn pri" data-act="demo">'+b('Run next step (demo)','运行下一步（演示）')+'</button></div>';
+  return demo+'<div class="card"><h3 class="hd">'+b('Flow: Center A','流程：A中心')+'</h3>'+orgTree()+'</div>'+
+    '<div class="card"><h3 class="hd">'+b('Rating tasks by stage','各环节评级任务')+'</h3><div class="scroll"><table><thead><tr><th>'+b('Stage','环节')+'</th><th>'+b('Rater','评级人')+'</th><th>'+b('Dept','部门')+'</th><th class="num">'+b('Employees','人数')+'</th><th class="num">'+b('Rated','已评')+'</th><th class="num">'+b('KPI pending','待KPI')+'</th><th>'+b('Status','状态')+'</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'+
+    '<div class="card"><h3 class="hd">G0 · '+b('KPI pending in BIPO','BIPO中KPI未完成')+' ('+pend.length+')</h3>'+g0+'</div>'+
+    '<p class="note">'+b('A stage opens only when every earlier task for its employees is submitted. In production the KPI status comes from the BIPO feed; the button above only simulates it.','只有其员工的前一环节任务全部提交，该环节才会开放。正式环境中KPI状态来自BIPO数据，上方按钮仅用于模拟。')+'</p>';
+}
+function canReturn(t){return t.items.every(function(x){var nx=chain(x.e)[x.i+1];return !nx||!S.sub[nx.s+':'+nx.r];});}
+function auditView(){
+  var rows=S.log.slice(0,150).map(function(l){return '<tr><td class="mono" style="white-space:nowrap">'+esc(new Date(l.t).toLocaleString())+'</td><td>'+esc(l.who)+'</td><td>'+esc(l.act)+'</td><td>'+esc(l.detail)+'</td></tr>';}).join('');
+  return '<div class="card"><h3 class="hd">'+b('Audit log (latest 150)','审计记录（最近150条）')+'</h3><div class="scroll"><table><thead><tr><th>'+b('Time','时间')+'</th><th>'+b('By','操作人')+'</th><th>'+b('Action','操作')+'</th><th>'+b('Detail','详情')+'</th></tr></thead><tbody>'+(rows||'<tr><td colspan="4" class="mut">'+b('No activity yet.','暂无记录。')+'</td></tr>')+'</tbody></table></div></div>';
+}
+
+/* ---------- actions ---------- */
+function toast(m){var el=document.getElementById('toast');el.textContent=m;el.className='show';clearTimeout(toast.t);toast.t=setTimeout(function(){el.className='';},2200);}
+function editable(t,e){var i=info(t);return !i.sub&&i.st!=='locked'&&e.kpi!=null;}
+function doRate(id,s,g){
+  var e=S.emps.filter(function(x){return x.id===id;})[0],t=T[s+':'+V().id];
+  if(!e||!t||!editable(t,e)||e.rt[s]===g)return;
+  var old=e.rt[s];e.rt[s]=g;
+  if(!changed(e,s))delete e.rm[s];
+  log('Rated · '+STAGES[s].se,e.name+' ('+e.id+') '+(old||'–')+' → '+g);save();render();
+  if(needRemark(e,s)){var el=document.getElementById('rm-'+id);if(el)el.focus();}
+}
+function suggestFor(t,onlyEmpty){
+  var n0=0;
+  GROUPS.forEach(function(g){
+    var its=t.items.filter(function(x){return x.e.level===g.id&&editable(t,x.e);}).sort(function(a,c){return c.e.kpi-a.e.kpi;});
+    var n=its.length;if(!n)return;
+    var nS=Math.round(n*.025),nA=Math.round(n*.175),nC=Math.round(n*.075),nD=Math.round(n*.025);
+    its.forEach(function(x,i){if(onlyEmpty&&x.e.rt[1])return;x.e.rt[1]=i<nS?'S':i<nS+nA?'A':i>=n-nD?'D':i>=n-nD-nC?'C':'B';n0++;});
+  });
+  return n0;
+}
+function doSuggest(){
+  var t=T[ui.task];if(!t||t.s!==1)return;
+  var n0=suggestFor(t);
+  log('Suggested from KPI rank',n0+' ratings filled for '+pname(t.r));save();render();toast(p('Suggestion filled. Review and adjust.','已填入建议，请复核调整。'));
+}
+function demoStep(){
+  T=buildTasks();
+  var keys=Object.keys(T).filter(function(k){var i=info(T[k]);return i.st!=='submitted'&&i.st!=='locked';});
+  var n=0,skip=0,blk=0;
+  keys.forEach(function(k){
+    var t=T[k],i=info(t);if(i.kpiPend){skip++;return;}
+    if(t.s===1)suggestFor(t,true);
+    var bl=blockers(t,info(t));if(bl.unrated||bl.remark){blk++;return;}
+    S.sub[k]=true;
+    t.items.forEach(function(x){var nx=chain(x.e)[x.i+1];if(nx&&!x.e.rt[nx.s])x.e.rt[nx.s]=x.e.rt[t.s];});
+    log('Demo submit · '+STAGES[t.s].se,pname(t.r)+' ('+i.total+')');n++;
+  });
+  save();render();
+  var en=[n+' task(s) submitted'],zh=['已提交'+n+'个任务'];
+  if(skip){en.push(skip+' waiting for KPI');zh.push(skip+'个待KPI');}
+  if(blk){en.push(blk+' missing remarks');zh.push(blk+'个缺少说明');}
+  toast(n||skip||blk?p(en.join(', '),zh.join('，')):p('Nothing to run: all done.','无可执行任务：已全部完成。'));
+}
+function orgTree(){
+  function sc(k){var t=T[k];if(!t)return '';var i=info(t);return statusChip(i.st);}
+  var ch1=T['1:CH01'],ch3=T['3:CH01'];
+  var h='<div class="pad"><div class="row"><b>'+b('Center A','A中心')+'</b><span class="mut">· '+esc(pname('CH01'))+'</span><span class="chip">S1 '+b('Dept Heads','部门负责人')+'</span> '+sc('1:CH01')+'<span class="chip">S3 '+b('Final','终评')+'</span> '+sc('3:CH01')+'</div><ul class="org">';
+  S.emps.filter(function(e){return e.level==='SD';}).forEach(function(dh){
+    h+='<li><div class="row"><b>'+esc(dh.name)+'</b><span class="mut">· '+b(dname(dh.dept).en,dname(dh.dept).zh)+' '+b('Dept Head','部门负责人')+'</span><span class="chip">S1 '+b('Managers','经理')+'</span> '+sc('1:'+dh.id)+'<span class="chip">S2</span> '+sc('2:'+dh.id)+'</div><ul class="org">';
+    S.emps.filter(function(e){return e.level==='MA'&&e.dh===dh.id;}).forEach(function(m){
+      var t=T['1:'+m.id],i=t?info(t):null;
+      h+='<li><div class="row"><span>'+esc(m.name)+'</span><span class="mut mono">'+(i?i.rated+'/'+i.total:'')+'</span><span class="chip">S1</span> '+sc('1:'+m.id)+'</div></li>';
+    });
+    h+='</ul></li>';
+  });
+  return h+'</ul></div>';
+}
+function doSubmit(){
+  var t=T[ui.task],inf=info(t),bl=blockers(t,inf);
+  if(inf.sub||inf.st==='locked'||bl.kpi||bl.unrated||bl.remark){ui.confirm=null;render();return;}
+  S.sub[t.key]=true;
+  t.items.forEach(function(x){var nx=chain(x.e)[x.i+1];if(nx&&!x.e.rt[nx.s])x.e.rt[nx.s]=x.e.rt[t.s];});
+  log('Submitted · '+STAGES[t.s].se,inf.total+' employees locked');ui.confirm=null;save();render();toast(p('Submitted and locked.','已提交并锁定。'));
+}
+function doReturn(){
+  var t=T[ui.reopen],reason=ui.reopenReason.trim();if(!t||!reason||!canReturn(t))return;
+  S.sub[t.key]=false;
+  t.items.forEach(function(x){var nx=chain(x.e)[x.i+1];if(nx){delete x.e.rt[nx.s];delete x.e.rm[nx.s];}});
+  log('Returned · '+STAGES[t.s].se,pname(t.r)+': '+reason);ui.reopen=null;ui.reopenReason='';save();render();
+}
+function doSync(id){
+  var e=S.emps.filter(function(x){return x.id===id;})[0];if(!e||e.kpi!=null)return;
+  e.kpi=Math.round((78+(parseInt(id.slice(1),10)%17))*10)/10;log('KPI synced from BIPO (demo)',e.name+' → '+e.kpi.toFixed(1));save();render();
+}
+function copyTSV(){
+  var txt=tsvText();
+  try{navigator.clipboard.writeText(txt).then(function(){toast(p('Recap copied.','汇总已复制。'));},function(){ui.tsv=txt;render();});}
+  catch(err){ui.tsv=txt;render();}
+}
+
+$app.addEventListener('click',function(ev){
+  var el=ev.target.closest('[data-act]');if(!el||el.disabled)return;var a=el.dataset.act,d=el.dataset;
+  if(a==='lang'){ui.lang=d.v;render();}
+  else if(a==='tab'){ui.tab=d.v;ui.confirm=null;render();}
+  else if(a==='task'){ui.task=d.v;ui.confirm=null;render();}
+  else if(a==='rate')doRate(d.id,+d.s,d.g);
+  else if(a==='suggest')doSuggest();
+  else if(a==='submit'){ui.confirm=ui.task;render();}
+  else if(a==='submit-no'){ui.confirm=null;render();}
+  else if(a==='submit-go')doSubmit();
+  else if(a==='rstage'){ui.recapStage=+d.v;render();}
+  else if(a==='copy')copyTSV();
+  else if(a==='tsv-close'){ui.tsv=null;render();}
+  else if(a==='reopen'){ui.reopen=d.v;ui.reopenReason='';render();var r=document.getElementById('rreason');if(r)r.focus();}
+  else if(a==='reopen-no'){ui.reopen=null;render();}
+  else if(a==='reopen-go')doReturn();
+  else if(a==='sync')doSync(d.id);
+  else if(a==='demo')demoStep();
+  else if(a==='reset-ask'){ui.resetAsk=true;render();}
+  else if(a==='reset-no'){ui.resetAsk=false;render();}
+  else if(a==='reset-go'){S=seed();ui.resetAsk=false;ui.task=null;ui.confirm=null;ui.reopen=null;save();render();toast(p('Sample data restored.','已恢复示例数据。'));}
+});
+$app.addEventListener('change',function(ev){
+  var el=ev.target;
+  if(el.id==='viewer'){ui.viewer=el.value;ui.tab=V().role==='hr'?'progress':'rating';ui.task=null;ui.confirm=null;ui.reopen=null;render();}
+  else if(el.id==='rgrp'){ui.recapGroup=el.value;render();}
+  else if(el.id==='drafts'){ui.drafts=el.checked;render();}
+  else if(el.dataset&&el.dataset.inp==='remark'){var e=S.emps.filter(function(x){return x.id===el.dataset.id;})[0];if(e)log('Remark · '+STAGES[+el.dataset.s].se,e.name+': '+el.value);save();}
+});
+$app.addEventListener('input',function(ev){
+  var el=ev.target;
+  if(el.dataset&&el.dataset.inp==='remark'){
+    var e=S.emps.filter(function(x){return x.id===el.dataset.id;})[0];if(!e)return;
+    e.rm[+el.dataset.s]=el.value;el.classList.toggle('req',!el.value.trim());
+    var bar=document.getElementById('bar'),t=T[ui.task];if(bar&&t)bar.innerHTML=barHTML(t,info(t));
+  }else if(el.id==='rreason'){ui.reopenReason=el.value;var c=document.getElementById('rconf');if(c)c.disabled=!el.value.trim();el.classList.toggle('req',!el.value.trim());}
+});
+
+S=load();
+if(!person(ui.viewer))ui.viewer='HR';
+render();
+})();
+</script>
+</body>
+</html>
