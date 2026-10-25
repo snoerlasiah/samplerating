@@ -90,6 +90,10 @@ label.v{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--mu
 .fc .fp{font-family:var(--mono);font-size:12px}
 .fc .fr{font-family:var(--mono);font-size:10px;color:var(--muted)}
 .fc .fs{font-size:10px;min-height:14px;margin-top:2px;overflow-wrap:anywhere}
+.fc .ft{font-family:var(--mono);font-size:11px;font-weight:500;margin-top:2px;overflow-wrap:anywhere}
+.hist{font-size:12px;margin:2px 0;white-space:nowrap}
+.hist .prev{padding:0 5px;min-width:0}
+.hc{display:block;white-space:normal;font-style:italic;color:var(--muted);font-size:12px;max-width:260px;overflow-wrap:anywhere}
 .fc.ok{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
 .fc.over{background:var(--bad-soft);border-color:transparent;color:var(--bad)}
 .fc.under{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
@@ -230,9 +234,20 @@ function ratingAt(e,s){
 function dist(list){var c={S:0,A:0,B:0,C:0,D:0},n=0;list.forEach(function(g){if(g){c[g]++;n++;}});return {c:c,n:n};}
 function state(g,c,n){if(!n)return 'na';var pc=c[g]/n*100,q=QUOTA[g];if(pc<q[0]-1e-9)return 'under';if(pc>q[1]+1e-9)return 'over';return 'ok';}
 function stLabel(s){return s==='ok'?b('In range','范围内'):s==='over'?b('Over','超出'):s==='under'?b('Under','不足'):'';}
-function cells(c,n){
+/* Recommended headcount for grade g in a group of N people; "≈" when no whole number fits the % range. */
+function target(g,N){
+  var q=QUOTA[g],lo=Math.ceil(N*q[0]/100-1e-9),hi=Math.floor(N*q[1]/100+1e-9);
+  if(lo>hi)return '≈'+Math.round(N*(q[0]+q[1])/200);
+  return lo===hi?String(lo):lo+'–'+hi;
+}
+function cells(c,n,N){
   return GRADES.map(function(g){var st=state(g,c,n),pc=n?c[g]/n*100:0;
-    return '<div class="fc '+st+'"><div class="fg">'+g+'</div><div class="fn">'+c[g]+'</div><div class="fp">'+(n?fmt(pc)+'%':'–')+'</div><div class="fr">'+QUOTA[g][0]+'–'+QUOTA[g][1]+'%</div><div class="fs">'+stLabel(st)+'</div></div>';}).join('');
+    return '<div class="fc '+st+'"><div class="fg">'+g+'</div><div class="fn">'+c[g]+'</div><div class="fp">'+(n?fmt(pc)+'%':'–')+'</div><div class="fr">'+QUOTA[g][0]+'–'+QUOTA[g][1]+'%</div><div class="ft">'+target(g,N)+' '+b('ppl','人')+'</div><div class="fs">'+stLabel(st)+'</div></div>';}).join('');
+}
+function history(e,s){
+  var h=chain(e).filter(function(x){return x.s<s&&e.rt[x.s]&&S.sub[x.s+':'+x.r];}).map(function(x){var r=String(e.rm[x.s]||'').trim();
+    return '<div class="hist"><span class="prev">'+e.rt[x.s]+'</span> <span class="mut">'+b(STAGES[x.s].se,STAGES[x.s].sz)+' · '+esc(pname(x.r))+'</span>'+(r?'<div class="hc">“'+esc(r)+'”</div>':'')+'</div>';}).join('');
+  return h||'<span class="mut">–</span>';
 }
 function pname(id){var q=person(id);return q?q.name:id;}
 
@@ -290,14 +305,14 @@ function ratingView(){
     banner='<div class="banner warn"><b>'+b('Waiting for the previous stage','等待上一环节完成')+'</b> ('+(inf.prevKeys.length-inf.prevPend.length)+' / '+inf.prevKeys.length+' '+b('submitted','已提交')+')<ul>'+
       inf.prevKeys.slice().sort(function(a,c){return !!S.sub[a]-!!S.sub[c];}).map(function(k){var pt=T[k],pi=info(pt);return '<li>'+esc(pname(pt.r))+' · '+b(STAGES[pt.s].se,STAGES[pt.s].sz)+' · '+pi.rated+' / '+pi.total+' '+b('rated','已评')+' '+statusChip(pi.st)+'</li>';}).join('')+'</ul></div>';
   }else if(inf.kpiPend)banner='<div class="banner info">'+inf.kpiPend+' '+b('employee(s) locked: KPI not yet completed. Rating of the others is open.','名员工已锁定：KPI尚未完成。其他员工可正常评级。')+'</div>';
-  else banner='<div class="banner info">'+b('Open for rating.','可以开始评级。')+(t.s>1?' '+b('Ratings are pre-filled from the previous stage. Any change needs a remark.','评级已按上一环节预填，调整须填写说明。'):'')+'</div>';
+  else banner='<div class="banner info">'+b('Open for rating.','可以开始评级。')+(t.s>1?' '+b('Ratings are pre-filled from the previous stage. Any change needs a comment explaining why.','评级已按上一环节预填，调整须填写评语说明原因。'):'')+'</div>';
   var fd=GROUPS.map(function(g){
     var its=t.items.filter(function(x){return x.e.level===g.id;});if(!its.length)return '';
     var d=dist(its.map(function(x){return x.e.rt[t.s];}));
     return '<div class="fdrow"><div class="fdhead"><b>'+b(g.en,g.zh)+'</b><span class="mut mono">'+d.n+' / '+its.length+' '+b('rated','已评')+'</span>'+
-      (d.n&&d.n<10?'<span class="chip warn">'+b('Small group: 1 person = '+fmt(100/d.n)+'%','小组：1人 = '+fmt(100/d.n)+'%')+'</span>':'')+'</div><div class="fd">'+cells(d.c,d.n)+'</div></div>';}).join('');
+      (d.n&&d.n<10?'<span class="chip warn">'+b('Small group: 1 person = '+fmt(100/d.n)+'%','小组：1人 = '+fmt(100/d.n)+'%')+'</span>':'')+'</div><div class="fd">'+cells(d.c,d.n,its.length)+'</div></div>';}).join('');
   return chips+banner+
-    '<div class="card"><h3 class="hd">'+b('Forced distribution check (indicator only)','强制分布检查（仅提示）')+'</h3>'+fd+'</div>'+
+    '<div class="card"><h3 class="hd">'+b('Forced distribution check (indicator only)','强制分布检查（仅提示）')+' <span class="note" style="font-weight:400">· '+b('“ppl” = recommended headcount for the whole group','“人” = 按全组人数建议的人数')+'</span></h3>'+fd+'</div>'+
     '<div class="card"><div class="toolbar" id="bar">'+barHTML(t,inf)+'</div><div class="scroll">'+tableHTML(t,inf)+'</div></div>';
 }
 function statusChip(st){
@@ -312,7 +327,7 @@ function barHTML(t,inf){
   var msg=[];
   if(bl.kpi)msg.push(bl.kpi+' '+b('waiting for KPI','待KPI'));
   if(bl.unrated)msg.push(bl.unrated+' '+b('not rated','未评级'));
-  if(bl.remark)msg.push(bl.remark+' '+b('remark(s) missing','缺少说明'));
+  if(bl.remark)msg.push(bl.remark+' '+b('comment(s) missing','缺少评语'));
   var mid=ok?(out?'<span class="chip warn">'+out+' '+b('group(s) outside range','组超出范围')+'</span>':'<span class="chip ok">'+b('Ready to submit','可提交')+'</span>'):'<span class="note">'+msg.join(' · ')+'</span>';
   var right;
   if(ui.confirm===t.key)right='<span class="note">'+b('Submit and lock this stage?','提交并锁定该环节？')+'</span><button class="btn pri" data-act="submit-go">'+b('Confirm','确认')+'</button><button class="btn" data-act="submit-no">'+b('Cancel','取消')+'</button>';
@@ -322,8 +337,8 @@ function barHTML(t,inf){
 function tableHTML(t,inf){
   var editableAll=!inf.sub&&inf.st!=='locked';
   var showPrev=t.items.some(function(x){return x.i>0;});
-  var cols=4+(showPrev?1:0)+(showPrev?1:0);
-  var h='<table><thead><tr><th class="num">#</th><th>'+b('Employee','员工')+'</th><th class="num">KPI</th>'+(showPrev?'<th>'+b('Previous','上一级')+'</th>':'')+'<th>'+b('Rating','评级')+'</th>'+(showPrev?'<th>'+b('Remark if changed','调整说明')+'</th>':'')+'</tr></thead><tbody>';
+  var cols=5+(showPrev?1:0);
+  var h='<table><thead><tr><th class="num">#</th><th>'+b('Employee','员工')+'</th><th class="num">KPI</th>'+(showPrev?'<th>'+b('Previous raters','上级评级')+'</th>':'')+'<th>'+b('Rating','评级')+'</th><th>'+b('Comment','评语')+'</th></tr></thead><tbody>';
   GROUPS.forEach(function(g){
     var its=t.items.filter(function(x){return x.e.level===g.id;});if(!its.length)return;
     var ranked=its.filter(function(x){return x.e.kpi!=null;}).sort(function(a,c){return c.e.kpi-a.e.kpi;});
@@ -331,17 +346,14 @@ function tableHTML(t,inf){
     its=its.slice().sort(function(a,c){return (c.e.kpi==null?-1:c.e.kpi)-(a.e.kpi==null?-1:a.e.kpi);});
     h+='<tr class="grp"><td colspan="'+cols+'">'+b(g.en,g.zh)+' · '+its.length+'</td></tr>';
     its.forEach(function(x){
-      var e=x.e,pend=e.kpi==null,dis=!editableAll||pend,cur=e.rt[t.s],pr=prevRating(e,t.s);
+      var e=x.e,pend=e.kpi==null,dis=!editableAll||pend,cur=e.rt[t.s];
       var btns=GRADES.map(function(q){return '<button class="gb'+(cur===q?' on':'')+'" data-act="rate" data-id="'+e.id+'" data-s="'+t.s+'" data-g="'+q+'" aria-pressed="'+(cur===q)+'" aria-label="'+q+' '+esc(e.name)+'"'+(dis?' disabled':'')+'>'+q+'</button>';}).join('');
-      var rem='';
-      if(showPrev){
-        if(changed(e,t.s)){
-          rem=inf.sub?esc(e.rm[t.s]||''):'<input class="rm'+(String(e.rm[t.s]||'').trim()?'':' req')+'" id="rm-'+e.id+'" data-inp="remark" data-id="'+e.id+'" data-s="'+t.s+'" value="'+esc(e.rm[t.s]||'')+'" placeholder="'+esc(p('Reason for change (required)','调整原因（必填）'))+'" aria-label="Remark '+esc(e.name)+'">';
-        }else rem='<span class="mut">–</span>';
-      }
+      var txt=String(e.rm[t.s]||''),rem;
+      if(dis)rem=txt.trim()?'<span class="hc">'+esc(txt)+'</span>':'<span class="mut">–</span>';
+      else rem='<input class="rm'+(needRemark(e,t.s)?' req':'')+'" id="rm-'+e.id+'" data-inp="remark" data-id="'+e.id+'" data-s="'+t.s+'" value="'+esc(txt)+'" placeholder="'+esc(changed(e,t.s)?p('Reason for change (required)','调整原因（必填）'):p('Comment (optional)','评语（选填）'))+'" aria-label="Comment '+esc(e.name)+'">';
       h+='<tr class="'+(pend?'locked':'')+'"><td class="num mut">'+(pend?'–':rank[e.id])+'</td><td class="emp"><b>'+esc(e.name)+'</b><span>'+e.id+' · '+esc(e.pos)+' · '+esc(dp(e.dept))+'</span></td>'+
         '<td class="num">'+(pend?'<span class="chip">'+b('KPI pending','KPI未完成')+'</span>':e.kpi.toFixed(1))+'</td>'+
-        (showPrev?'<td><span class="prev">'+(pr||'–')+'</span></td>':'')+'<td style="white-space:nowrap">'+btns+'</td>'+(showPrev?'<td>'+rem+'</td>':'')+'</tr>';
+        (showPrev?'<td>'+history(e,t.s)+'</td>':'')+'<td style="white-space:nowrap">'+btns+'</td><td>'+rem+'</td></tr>';
     });
   });
   return h+'</tbody></table>';
@@ -368,8 +380,8 @@ function recapData(){
   var gr=GROUPS.map(function(g){var its=sc.filter(function(e){return e.level===g.id;});if(!its.length)return null;var q=dist(its.map(function(e){return ratingAt(e,s);}));return {g:g,total:its.length,c:q.c,n:q.n};}).filter(Boolean);
   return {rows:rows,tot:{total:tot,c:tq.c,n:tq.n},gr:gr};
 }
-function gcells(c,n,color){
-  return GRADES.map(function(g){var st=color?state(g,c,n):'';return '<td class="g '+st+'">'+c[g]+'<small>'+(n?fmt(c[g]/n*100)+'%':'–')+'</small></td>';}).join('');
+function gcells(c,n,color,N){
+  return GRADES.map(function(g){var st=color?state(g,c,n):'';return '<td class="g '+st+'">'+c[g]+'<small>'+(n?fmt(c[g]/n*100)+'%':'–')+'</small>'+(N?'<small>'+b('target','建议')+' '+target(g,N)+'</small>':'')+'</td>';}).join('');
 }
 function recapView(){
   var D=recapData(),color=ui.recapGroup!=='ALL';
@@ -377,10 +389,10 @@ function recapView(){
   var go='<option value="ALL">'+esc(p('All level groups','全部职级组'))+'</option>'+GROUPS.map(function(g){return '<option value="'+g.id+'"'+(ui.recapGroup===g.id?' selected':'')+'>'+esc(p(g.en,g.zh))+'</option>';}).join('');
   go=go.replace('value="ALL"','value="ALL"'+(ui.recapGroup==='ALL'?' selected':''));
   var head='<tr><th>'+b('Department','部门')+'</th><th class="num">'+b('Rated','已评')+'</th>'+GRADES.map(function(g){return '<th class="num">'+g+' <span style="text-transform:none">'+QUOTA[g][0]+'–'+QUOTA[g][1]+'%</span></th>';}).join('')+'</tr>';
-  var rows=D.rows.map(function(r){return '<tr><td>'+b(r.d.en,r.d.zh)+'</td><td class="num">'+r.n+' / '+r.total+'</td>'+gcells(r.c,r.n,color)+'</tr>';}).join('');
-  rows+='<tr class="tot"><td>'+b('Total','合计')+'</td><td class="num">'+D.tot.n+' / '+D.tot.total+'</td>'+gcells(D.tot.c,D.tot.n,color)+'</tr>';
+  var rows=D.rows.map(function(r){return '<tr><td>'+b(r.d.en,r.d.zh)+'</td><td class="num">'+r.n+' / '+r.total+'</td>'+gcells(r.c,r.n,color,color&&r.total)+'</tr>';}).join('');
+  rows+='<tr class="tot"><td>'+b('Total','合计')+'</td><td class="num">'+D.tot.n+' / '+D.tot.total+'</td>'+gcells(D.tot.c,D.tot.n,color,color&&D.tot.total)+'</tr>';
   var ghead='<tr><th>'+b('Level group','职级组')+'</th><th class="num">'+b('Rated','已评')+'</th>'+GRADES.map(function(g){return '<th class="num">'+g+'</th>';}).join('')+'</tr>';
-  var grows=D.gr.map(function(r){return '<tr><td>'+b(r.g.en,r.g.zh)+'</td><td class="num">'+r.n+' / '+r.total+'</td>'+gcells(r.c,r.n,true)+'</tr>';}).join('');
+  var grows=D.gr.map(function(r){return '<tr><td>'+b(r.g.en,r.g.zh)+'</td><td class="num">'+r.n+' / '+r.total+'</td>'+gcells(r.c,r.n,true,r.total)+'</tr>';}).join('');
   var tsv=ui.tsv!==null?'<div class="card pad"><div class="note" style="margin-bottom:6px">'+b('Clipboard is blocked here. Select the text below and copy it.','此处无法访问剪贴板，请选中下方文字后复制。')+'</div><textarea class="tsv" id="tsvbox" readonly>'+esc(ui.tsv)+'</textarea><div style="margin-top:6px"><button class="btn sm" data-act="tsv-close">'+b('Close','关闭')+'</button></div></div>':'';
   return '<div class="row" style="justify-content:space-between"><div class="row"><div class="seg" role="group">'+stg+'</div><select id="rgrp" aria-label="Level group">'+go+'</select>'+
     '<label class="row note"><input type="checkbox" id="drafts"'+(ui.drafts?' checked':'')+'> '+b('Include drafts','含草稿')+'</label></div>'+
@@ -432,7 +444,6 @@ function doRate(id,s,g){
   var e=S.emps.filter(function(x){return x.id===id;})[0],t=T[s+':'+V().id];
   if(!e||!t||!editable(t,e)||e.rt[s]===g)return;
   var old=e.rt[s];e.rt[s]=g;
-  if(!changed(e,s))delete e.rm[s];
   log('Rated · '+STAGES[s].se,e.name+' ('+e.id+') '+(old||'–')+' → '+g);save();render();
   if(needRemark(e,s)){var el=document.getElementById('rm-'+id);if(el)el.focus();}
 }
@@ -466,7 +477,7 @@ function demoStep(){
   save();render();
   var en=[n+' task(s) submitted'],zh=['已提交'+n+'个任务'];
   if(skip){en.push(skip+' waiting for KPI');zh.push(skip+'个待KPI');}
-  if(blk){en.push(blk+' missing remarks');zh.push(blk+'个缺少说明');}
+  if(blk){en.push(blk+' missing comments');zh.push(blk+'个缺少评语');}
   toast(n||skip||blk?p(en.join(', '),zh.join('，')):p('Nothing to run: all done.','无可执行任务：已全部完成。'));
 }
 function orgTree(){
@@ -533,13 +544,13 @@ $app.addEventListener('change',function(ev){
   if(el.id==='viewer'){ui.viewer=el.value;ui.tab=V().role==='hr'?'progress':'rating';ui.task=null;ui.confirm=null;ui.reopen=null;render();}
   else if(el.id==='rgrp'){ui.recapGroup=el.value;render();}
   else if(el.id==='drafts'){ui.drafts=el.checked;render();}
-  else if(el.dataset&&el.dataset.inp==='remark'){var e=S.emps.filter(function(x){return x.id===el.dataset.id;})[0];if(e)log('Remark · '+STAGES[+el.dataset.s].se,e.name+': '+el.value);save();}
+  else if(el.dataset&&el.dataset.inp==='remark'){var e=S.emps.filter(function(x){return x.id===el.dataset.id;})[0];if(e)log('Comment · '+STAGES[+el.dataset.s].se,e.name+': '+el.value);save();}
 });
 $app.addEventListener('input',function(ev){
   var el=ev.target;
   if(el.dataset&&el.dataset.inp==='remark'){
     var e=S.emps.filter(function(x){return x.id===el.dataset.id;})[0];if(!e)return;
-    e.rm[+el.dataset.s]=el.value;el.classList.toggle('req',!el.value.trim());
+    e.rm[+el.dataset.s]=el.value;el.classList.toggle('req',needRemark(e,+el.dataset.s));
     var bar=document.getElementById('bar'),t=T[ui.task];if(bar&&t)bar.innerHTML=barHTML(t,info(t));
   }else if(el.id==='rreason'){ui.reopenReason=el.value;var c=document.getElementById('rconf');if(c)c.disabled=!el.value.trim();el.classList.toggle('req',!el.value.trim());}
 });
